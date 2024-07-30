@@ -1,4 +1,4 @@
-let isTracking = false;
+let isTracking = true;
 let lastSearchQuery = "";
 
 // Initialize IndexedDB
