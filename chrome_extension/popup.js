@@ -28,6 +28,10 @@ document.getElementById("startStop").addEventListener("click", () => {
   );
 });
 
+document.getElementById("seeStats").addEventListener("click", () => {
+  chrome.tabs.create({ url: "stats.html" });
+});
+
 /**
  * Render the score boards for all search events
  */
