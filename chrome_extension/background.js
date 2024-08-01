@@ -143,6 +143,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       isTracking = !isTracking;
       sendResponse({ isTracking });
       break;
+    case "GET_ALL_EVENTS":
+      getAllEvents(sendResponse);
+      return true;
     case "GET_NOT_SCORED_SEARCH_QUERIES":
       getNotScoredSearchQueries(sendResponse);
       return true; // Indicates that we want to send a response asynchronously
@@ -152,7 +155,61 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
-const getNotScoredSearchQueries = (sendResponse) => {
+async function getAllEvents(sendResponse) {
+  if (!db) return;
+  try {
+    const [events, scores] = await Promise.all([
+      getAllUserActivities(),
+      getAllUserScores(),
+    ]);
+
+    sendResponse({ events, scores });
+  } catch (error) {
+    sendResponse({ error: error.message });
+  }
+}
+
+async function getAllUserActivities() {
+  return new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error("Database not initialized"));
+    }
+
+    const transaction = db.transaction(["userActivities"], "readonly");
+    const store = transaction.objectStore("userActivities");
+    const req = store.getAll();
+
+    req.onsuccess = (e) => {
+      resolve(e.target.result);
+    };
+
+    req.onerror = (e) => {
+      reject(new Error("Error getting all user activities"));
+    };
+  });
+}
+
+async function getAllUserScores() {
+  return new Promise((resolve, reject) => {
+    if (!db) {
+      reject(new Error("Database not initialized"));
+    }
+
+    const transaction = db.transaction(["userScores"], "readonly");
+    const store = transaction.objectStore("userScores");
+    const req = store.getAll();
+
+    req.onsuccess = (e) => {
+      resolve(e.target.result);
+    };
+
+    req.onerror = (e) => {
+      reject(new Error("Error getting all user scores"));
+    };
+  });
+}
+
+function getNotScoredSearchQueries(sendResponse) {
   if (!db) return;
 
   const transaction = db.transaction(["userScores"], "readonly");
@@ -166,9 +223,9 @@ const getNotScoredSearchQueries = (sendResponse) => {
 
     sendResponse({ queries: notScoredQueries });
   };
-};
+}
 
-const updateSearchQueryScore = (event, sendResponse) => {
+function updateSearchQueryScore(event, sendResponse) {
   if (!db) return;
 
   const transaction = db.transaction(["userScores"], "readwrite");
@@ -189,4 +246,4 @@ const updateSearchQueryScore = (event, sendResponse) => {
       console.error("Error updating score:", err);
     };
   };
-};
+}
