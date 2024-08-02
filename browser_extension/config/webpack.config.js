@@ -2,6 +2,7 @@
 
 const { merge } = require('webpack-merge');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const webpack = require('webpack');
 
 const common = require('./webpack.common.js');
 const PATHS = require('./paths');
@@ -12,7 +13,7 @@ const config = (env, argv) =>
     entry: {
       popup: PATHS.src + '/popup.ts',
       background: PATHS.src + '/background.ts',
-      stats: PATHS.src + '/stats/stats.js',
+      stats: PATHS.src + '/stats/stats.ts',
     },
     plugins: [
       new HtmlWebpackPlugin({

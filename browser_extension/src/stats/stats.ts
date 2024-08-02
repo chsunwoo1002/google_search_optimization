@@ -1,3 +1,5 @@
+'use strict';
+
 // Listen for the DOM content to be fully loaded
 document.addEventListener('DOMContentLoaded', function () {
   // Send a message to background.js to request data
@@ -7,7 +9,6 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     if (response && response.events && response.scores) {
-      console.log(response);
     }
   });
 });
