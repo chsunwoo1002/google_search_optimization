@@ -12,7 +12,7 @@ function initializePopup(): void {
 
   chrome.runtime.sendMessage(
     { action: 'GET_NOT_SCORED_SEARCH_QUERIES' },
-    (response: { queries?: string[] }) => {
+    (response: { queries?: QueryScore[] }) => {
       console.log('Not scored search queries in popup:', response);
       if (response && response.queries) {
         renderScoreBoards(response.queries);
@@ -39,10 +39,15 @@ document.getElementById('seeStats')?.addEventListener('click', () => {
   chrome.tabs.create({ url: 'stats.html' });
 });
 
+interface QueryScore {
+  content: string;
+  id: string;
+  score: number;
+}
 /**
  * Render the score boards for all search events
  */
-function renderScoreBoards(queries: string[]): void {
+function renderScoreBoards(queries: QueryScore[]): void {
   console.log('Rendering score boards', queries);
   const container = document.querySelector('.score-buttons');
   if (container) {
@@ -52,7 +57,7 @@ function renderScoreBoards(queries: string[]): void {
       const scoreBoard = document.createElement('div');
       scoreBoard.classList.add('score-board');
       scoreBoard.innerHTML = `
-        <p>Query: ${query}</p>
+        <p>Query: ${query.content}</p>
         <p>Rate your last search:</p>
         <button class="score" data-score="1">1</button>
         <button class="score" data-score="2">2</button>
@@ -70,11 +75,11 @@ function renderScoreBoards(queries: string[]): void {
             {
               action: 'UPDATE_SEARCH_QUERY_SCORE',
               event: {
-                searchQuery: query,
+                id: query.id,
                 score: score,
               },
             },
-            (response: { queries?: string[] }) => {
+            (response: { queries?: QueryScore[] }) => {
               if (response.queries) {
                 renderScoreBoards(response.queries);
               }
