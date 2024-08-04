@@ -1,0 +1,18 @@
+{
+  "name": "dbstorage",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "index.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.623.0",
+    "@aws-sdk/lib-dynamodb": "^3.623.0",
+    "uuid": "^10.0.0"
+  }
+}
