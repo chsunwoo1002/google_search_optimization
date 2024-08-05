@@ -1,13 +1,10 @@
-export enum BrowserEvent {
-  OnTabUpdated = 'onTabUpdated',
-  OnMessage = 'onMessage',
-}
+import { BrowserEvent } from './browserEvent';
 
 interface BrowserMessageService {
   addListener(event: BrowserEvent, listener: (...event: any) => void): void;
 }
 
-class ChromeBrowserMessageService implements BrowserMessageService {
+export class ChromeBrowserMessageService implements BrowserMessageService {
   constructor() {}
 
   addListener(event: BrowserEvent, listener: (...event: any) => void) {
@@ -23,17 +20,6 @@ class ChromeBrowserMessageService implements BrowserMessageService {
             return listener(message, sender, sendResponse);
           }
         );
-    }
-  }
-}
-
-export class BrowserMessageServiceFactory {
-  static createBrowserMessageService(browser: string): BrowserMessageService {
-    switch (browser) {
-      case 'chrome':
-        return new ChromeBrowserMessageService();
-      default:
-        throw new Error('Browser not supported');
     }
   }
 }

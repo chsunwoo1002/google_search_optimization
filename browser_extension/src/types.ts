@@ -24,8 +24,8 @@ export interface UserQueryEvent {
 
 export interface ParsedTab {
   type: string;
-  url?: string;
-  title?: string;
+  url: string;
+  title: string;
 }
 
 export interface QueryEventResponse {

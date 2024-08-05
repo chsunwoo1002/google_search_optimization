@@ -1,7 +1,8 @@
 import { ParsedTab } from '../types';
-import BrowserMessageService, { BrowserEvent } from './browserMessage';
+import BrowserMessageService from './message/browserMessage';
 import DataSyncService from './dataSync';
 import LocalDataStorageService from './localDataStorage';
+import { BrowserEvent } from './message/browserEvent';
 
 class BackgroundService {
   private isTracking: boolean = true;
@@ -18,10 +19,9 @@ class BackgroundService {
     this.dataSyncService = dataSyncService;
     this.localDataStorageService = localDataStorageService;
     this.browserMessageService = browserMessageService;
-    this.initialize();
   }
 
-  private async initialize() {
+  public async start() {
     await this.initializeUserId();
     this.setupListeners();
   }
@@ -54,7 +54,8 @@ class BackgroundService {
     changeInfo: chrome.tabs.TabChangeInfo,
     tab: chrome.tabs.Tab
   ) {
-    if (!this.isTracking || !this.userId) return;
+    if (!this.isTracking) return;
+
     if (changeInfo.status === 'complete') {
       await this.processTabUpdate(tabId, tab);
     }
@@ -62,8 +63,9 @@ class BackgroundService {
 
   private async processTabUpdate(tabId: number, tab: chrome.tabs.Tab) {
     if (!this.userId) return;
+    if (!tab.url || !tab.title) return;
 
-    const parsedTab = this.parseTab(tab);
+    const parsedTab = this.parseTab(tab.title, tab.url);
     const event = {
       ...parsedTab,
       timestamp: Date.now(),
@@ -83,32 +85,32 @@ class BackgroundService {
     }
   }
 
-  private parseTab(tab: chrome.tabs.Tab): ParsedTab {
-    if (this.isNewTab(tab)) {
-      return { type: 'new_tab' };
+  private parseTab(title: string, url: string): ParsedTab {
+    if (this.isNewTab(url)) {
+      return { type: 'new_tab', url, title };
     }
 
-    if (this.isGoogleSearchPage(tab.url)) {
+    if (this.isGoogleSearchPage(url)) {
       return {
         type: 'search_page',
-        url: tab.url,
-        title: tab.title ? tab.title.replace('- Google Search', '').trim() : '',
+        url,
+        title: title.replace('- Google Search', '').trim(),
       };
     }
 
     return {
       type: 'visit_page',
-      url: tab.url,
-      title: tab.title,
+      url,
+      title,
     };
   }
 
-  private isGoogleSearchPage(url: string | undefined): boolean {
-    return url ? url.includes('google.com/search') : false;
+  private isGoogleSearchPage(url: string): boolean {
+    return url.includes('google.com/search');
   }
 
-  private isNewTab(tab: chrome.tabs.Tab): boolean {
-    return tab.active && tab.url === 'chrome://newtab/';
+  private isNewTab(url: string): boolean {
+    return url.includes('chrome://newtab');
   }
 
   private handleMessage(
