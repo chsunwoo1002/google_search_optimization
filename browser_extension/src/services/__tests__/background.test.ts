@@ -2,11 +2,9 @@ import { chrome } from 'jest-chrome';
 import BackgroundService from '../background';
 import DataSyncService from '../dataSync';
 import LocalDataStorageService from '../localDataStorage';
-import BrowserMessageService, {
-  ChromeBrowserMessageService,
-} from '../message/browserMessage';
 import { API_ENDPOINT } from '../../utils/constant';
 import { BrowserEvent } from '../message/browserEvent';
+import { BrowserMessageServiceFactory } from '../message/messageFactory';
 
 // configuring dependencies
 jest.mock('../dataSync');
@@ -86,7 +84,7 @@ describe('BackgroundService', () => {
       chrome.storage.local
     ) as jest.Mocked<LocalDataStorageService>;
     const browserMessageService =
-      new ChromeBrowserMessageService() as jest.Mocked<BrowserMessageService>;
+      BrowserMessageServiceFactory.createBrowserMessageService('chrome');
 
     beforeEach(() => {
       jest.clearAllMocks();
