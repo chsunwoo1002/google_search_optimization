@@ -5,7 +5,6 @@ export enum BrowserEvent {
 
 interface BrowserMessageService {
   addListener(event: BrowserEvent, listener: (...event: any) => void): void;
-  sendMessage(message: any): void;
 }
 
 class ChromeBrowserMessageService implements BrowserMessageService {
@@ -25,10 +24,6 @@ class ChromeBrowserMessageService implements BrowserMessageService {
           }
         );
     }
-  }
-
-  sendMessage(message: any): void {
-    chrome.runtime.sendMessage(message);
   }
 }
 

@@ -1,4 +1,9 @@
-import { DataSyncConfig, UserActivityEvent, UserQueryEvent } from '../types';
+import {
+  DataSyncConfig,
+  QueryEventResponse,
+  UserActivityEvent,
+  UserQueryEvent,
+} from '../types';
 
 class DataSyncService {
   private config: DataSyncConfig;
@@ -33,7 +38,7 @@ class DataSyncService {
     });
   }
 
-  async getUnratedQueries(userId: string): Promise<any> {
+  async getUnratedQueries(userId: string): Promise<QueryEventResponse[]> {
     const response = await fetch(
       `${this.config.API_ENDPOINT}/queries/emptyScore/${userId}`
     );

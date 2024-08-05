@@ -27,3 +27,12 @@ export interface ParsedTab {
   url?: string;
   title?: string;
 }
+
+export interface QueryEventResponse {
+  content: string;
+  id: string;
+  score: number | null;
+  tabId: number;
+  timestamp: number;
+  userId: string;
+}
