@@ -36,7 +36,9 @@ describe('DataSyncService', () => {
   test('saveActivityEvent should send activity event to the server', async () => {
     const mockEvent: UserActivityEvent = {
       userId: 'user123',
-      type: 'click',
+      type: 'new_tab',
+      url: 'https://www.google.com',
+      title: 'Google',
       timestamp: Date.now(),
       tabId: 1,
     };

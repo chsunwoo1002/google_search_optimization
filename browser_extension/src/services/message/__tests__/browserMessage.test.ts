@@ -1,8 +1,7 @@
 import { chrome } from 'jest-chrome';
-import BrowserMessageService, {
-  BrowserEvent,
-  BrowserMessageServiceFactory,
-} from '../browserMessage';
+import BrowserMessageService from '../browserMessage';
+import { BrowserMessageServiceFactory } from '../messageFactory';
+import { BrowserEvent } from '../browserEvent';
 
 describe('BrowserMessageServiceFactory', () => {
   test('creates ChromeBrowserMessageService for Chrome browser', () => {

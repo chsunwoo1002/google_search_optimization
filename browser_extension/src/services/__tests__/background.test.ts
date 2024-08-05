@@ -3,282 +3,479 @@ import BackgroundService from '../background';
 import DataSyncService from '../dataSync';
 import LocalDataStorageService from '../localDataStorage';
 import BrowserMessageService, {
-  BrowserEvent,
-  BrowserMessageServiceFactory,
-} from '../browserMessage';
+  ChromeBrowserMessageService,
+} from '../message/browserMessage';
+import { API_ENDPOINT } from '../../utils/constant';
+import { BrowserEvent } from '../message/browserEvent';
 
+// configuring dependencies
 jest.mock('../dataSync');
 jest.mock('../localDataStorage');
-jest.mock('../browserMessage');
+jest.mock('../message/browserMessage', () => {
+  return {
+    ChromeBrowserMessageService: jest.fn().mockImplementation(() => {
+      const listeners: any = {};
+      return {
+        addListener: jest.fn().mockImplementation((event, listener) => {
+          listeners[event] = listener;
+        }),
+        listeners,
+      };
+    }),
+  };
+});
+
+// test variables
+const EXISTING_USER_ID = 'existingUserId';
+const NEW_USER_ID = 'newUserId';
+const TAB_ID = 1;
+const CHANGE_INFO = {
+  status: 'complete',
+};
+const SEARCH_TAB = {
+  url: 'https://www.google.com/search?q=test',
+  title: 'Test - Google Search',
+  parsedTabTitle: 'Test',
+};
+const NEW_TAB = {
+  url: 'chrome://newtab/',
+  title: 'New Tab',
+  active: true,
+};
+const PAGE_TAB = {
+  url: 'https://www.test.com',
+  title: 'Test',
+};
+const TRACKING_STATUS_MSG = {
+  action: 'GET_TRACKING_STATUS',
+};
+const TRACKING_TOGGLE_ACTION = {
+  action: 'TOGGLE_PERMISSION',
+};
+const UNRATED_QUERIES_LIST_REQUEST = {
+  action: 'GET_NOT_SCORED_SEARCH_QUERIES',
+};
+const UPDATE_SCORE_REQUEST = {
+  action: 'UPDATE_SEARCH_QUERY_SCORE',
+  event: {
+    id: '1',
+    score: 1,
+  },
+};
+const ERROR_MESSAGE = 'Test Error';
 
 describe('BackgroundService', () => {
-  let backgroundService: BackgroundService;
-  let mockDataSyncService: jest.Mocked<DataSyncService>;
-  let mockLocalDataStorageService: jest.Mocked<LocalDataStorageService>;
-  let mockBrowserMessageService: jest.Mocked<BrowserMessageService>;
-
-  beforeEach(() => {
-    // create mock depedencies
-    mockDataSyncService = new DataSyncService({
-      API_ENDPOINT: 'https://api.example.com',
+  describe('Chrome Extension', () => {
+    const dataSyncService = new DataSyncService({
+      API_ENDPOINT,
     }) as jest.Mocked<DataSyncService>;
-    mockLocalDataStorageService = new LocalDataStorageService({
-      get: jest.fn(),
-      set: jest.fn(),
-    } as any) as jest.Mocked<LocalDataStorageService>;
-    mockBrowserMessageService =
-      BrowserMessageServiceFactory.createBrowserMessageService(
-        'chrome'
-      ) as jest.Mocked<BrowserMessageService>;
+    const localDataStorageService = new LocalDataStorageService(
+      chrome.storage.local
+    ) as jest.Mocked<LocalDataStorageService>;
+    const browserMessageService =
+      new ChromeBrowserMessageService() as jest.Mocked<BrowserMessageService>;
 
-    backgroundService = new BackgroundService(
-      mockDataSyncService,
-      mockLocalDataStorageService,
-      mockBrowserMessageService
-    );
-  });
-
-  describe('initialization', () => {
-    it('should initialize userId from local storage if it exists', async () => {
-      const mockUserId = 'test-user-id';
-      mockLocalDataStorageService.getUserId.mockResolvedValue(mockUserId);
-
-      await (backgroundService as any).initializeUserId();
-
-      expect(mockLocalDataStorageService.getUserId).toHaveBeenCalled();
-      expect(mockDataSyncService.createUserId).not.toHaveBeenCalled();
-      expect((backgroundService as any).userId).toBe(mockUserId);
+    beforeEach(() => {
+      jest.clearAllMocks();
     });
 
-    it('should create a new userId if it does not exist in local storage', async () => {
-      const mockUserId = 'new-user-id';
-      mockLocalDataStorageService.getUserId.mockResolvedValue(null);
-      mockDataSyncService.createUserId.mockResolvedValue(mockUserId);
-
-      await (backgroundService as any).initializeUserId();
-
-      expect(mockLocalDataStorageService.getUserId).toHaveBeenCalled();
-      expect(mockDataSyncService.createUserId).toHaveBeenCalled();
-      expect(mockLocalDataStorageService.setUserId).toHaveBeenCalledWith(
-        mockUserId
-      );
-      expect((backgroundService as any).userId).toBe(mockUserId);
-    });
-  });
-
-  describe('handleTabUpdated', () => {
-    it('should not process tab update if tracking is disabled', async () => {
-      (backgroundService as any).isTracking = false;
-      (backgroundService as any).userId = 'test-user-id';
-
-      await (backgroundService as any).handleTabUpdated(
-        1,
-        { status: 'complete' },
-        {} as chrome.tabs.Tab
-      );
-
-      expect(mockDataSyncService.saveActivityEvent).not.toHaveBeenCalled();
-      expect(mockDataSyncService.saveQueryEvent).not.toHaveBeenCalled();
+    describe('constructor', () => {
+      it('should create an instance of BackgroundService', () => {
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        expect(backgroundService).toBeInstanceOf(BackgroundService);
+      });
     });
 
-    it('should process tab update when tracking is enabled and status is complete', async () => {
-      (backgroundService as any).isTracking = true;
-      (backgroundService as any).userId = 'test-user-id';
-      const mockTab = {
-        url: 'https://example.com',
-        title: 'Example',
-      } as chrome.tabs.Tab;
+    describe('start', () => {
+      it('should start the background service', async () => {
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
 
-      await (backgroundService as any).handleTabUpdated(
-        1,
-        { status: 'complete' },
-        mockTab
-      );
+        expect(localDataStorageService.getUserId).toHaveBeenCalledTimes(1);
+        expect(browserMessageService.addListener).toHaveBeenCalledTimes(2);
+        expect(browserMessageService.addListener).toHaveBeenCalledWith(
+          BrowserEvent.OnTabUpdated,
+          expect.any(Function)
+        );
+        expect(browserMessageService.addListener).toHaveBeenCalledWith(
+          BrowserEvent.OnMessage,
+          expect.any(Function)
+        );
+      });
 
-      expect(mockDataSyncService.saveActivityEvent).toHaveBeenCalled();
+      it('should not create a new user id if it already exists', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(EXISTING_USER_ID);
+
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
+
+        expect(localDataStorageService.getUserId).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.createUserId).not.toHaveBeenCalled();
+        expect(localDataStorageService.setUserId).not.toHaveBeenCalled();
+
+        // @ts-ignore
+        expect(backgroundService.userId).toBe(EXISTING_USER_ID);
+      });
+
+      it('should create a new user id if it does not exist', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(null);
+        dataSyncService.createUserId.mockResolvedValue(NEW_USER_ID);
+        localDataStorageService.setUserId.mockResolvedValue();
+
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+
+        await backgroundService.start();
+
+        expect(localDataStorageService.getUserId).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.createUserId).toHaveBeenCalledTimes(1);
+        expect(localDataStorageService.setUserId).toHaveBeenCalledTimes(1);
+
+        // @ts-ignore
+        expect(backgroundService.userId).toBe(NEW_USER_ID);
+      });
+
+      it('should set user id as null if it throws an error', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(null);
+        dataSyncService.createUserId.mockRejectedValue(new Error('Error'));
+
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+
+        await backgroundService.start();
+
+        // @ts-ignore
+        expect(backgroundService.userId).toBe(null);
+      });
     });
-  });
 
-  describe('processTabUpdate', () => {
-    it('should save activity event for regular page visit', async () => {
-      (backgroundService as any).userId = 'test-user-id';
-      const mockTab = {
-        url: 'https://example.com',
-        title: 'Example',
-      } as chrome.tabs.Tab;
+    describe('onTabUpdated', () => {
+      it('should ignore if the userId is not set', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(null);
+        dataSyncService.createUserId.mockRejectedValue(
+          new Error(ERROR_MESSAGE)
+        );
 
-      await (backgroundService as any).processTabUpdate(1, mockTab);
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
 
-      expect(mockDataSyncService.saveActivityEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'visit_page',
-          url: 'https://example.com',
-          title: 'Example',
-          userId: 'test-user-id',
-        })
-      );
-    });
+        // @ts-ignore
+        await browserMessageService.listeners[BrowserEvent.OnTabUpdated](
+          TAB_ID,
+          CHANGE_INFO,
+          SEARCH_TAB
+        );
+      });
 
-    it('should save activity and query events for Google search page', async () => {
-      (backgroundService as any).userId = 'test-user-id';
-      const mockTab = {
-        url: 'https://www.google.com/search?q=test',
-        title: 'test - Google Search',
-      } as chrome.tabs.Tab;
+      it('should detect search page and store it as activity and query events ', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(EXISTING_USER_ID);
+        dataSyncService.saveActivityEvent.mockResolvedValue();
+        dataSyncService.saveQueryEvent.mockResolvedValue();
 
-      await (backgroundService as any).processTabUpdate(1, mockTab);
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
 
-      expect(mockDataSyncService.saveActivityEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
+        // @ts-ignore
+        await browserMessageService.listeners[BrowserEvent.OnTabUpdated](
+          TAB_ID,
+          CHANGE_INFO,
+          SEARCH_TAB
+        );
+
+        expect(dataSyncService.saveActivityEvent).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.saveActivityEvent).toHaveBeenCalledWith({
+          userId: EXISTING_USER_ID,
           type: 'search_page',
-          url: 'https://www.google.com/search?q=test',
-          title: 'test',
-          userId: 'test-user-id',
-        })
-      );
-      expect(mockDataSyncService.saveQueryEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          content: 'test',
-          userId: 'test-user-id',
-        })
-      );
-    });
-  });
+          url: SEARCH_TAB.url,
+          title: SEARCH_TAB.parsedTabTitle,
+          timestamp: expect.any(Number),
+          tabId: TAB_ID,
+        });
+        expect(dataSyncService.saveQueryEvent).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.saveQueryEvent).toHaveBeenCalledWith({
+          content: SEARCH_TAB.parsedTabTitle,
+          tabId: TAB_ID,
+          timestamp: expect.any(Number),
+          userId: EXISTING_USER_ID,
+        });
+      });
 
-  describe('parseTab', () => {
-    it('should parse new tab correctly', () => {
-      const mockTab = {
-        active: true,
-        url: 'chrome://newtab/',
-      } as chrome.tabs.Tab;
-      const result = (backgroundService as any).parseTab(mockTab);
-      expect(result).toEqual({ type: 'new_tab' });
-    });
+      it('should detect new tab and store it as activity event', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(EXISTING_USER_ID);
+        dataSyncService.saveActivityEvent.mockResolvedValue();
 
-    it('should parse Google search page correctly', () => {
-      const mockTab = {
-        url: 'https://www.google.com/search?q=test',
-        title: 'test - Google Search',
-      } as chrome.tabs.Tab;
-      const result = (backgroundService as any).parseTab(mockTab);
-      expect(result).toEqual({
-        type: 'search_page',
-        url: 'https://www.google.com/search?q=test',
-        title: 'test',
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
+
+        // @ts-ignore
+        await browserMessageService.listeners[BrowserEvent.OnTabUpdated](
+          TAB_ID,
+          CHANGE_INFO,
+          NEW_TAB
+        );
+
+        expect(dataSyncService.saveActivityEvent).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.saveActivityEvent).toHaveBeenCalledWith({
+          userId: EXISTING_USER_ID,
+          type: 'new_tab',
+          timestamp: expect.any(Number),
+          tabId: TAB_ID,
+          url: NEW_TAB.url,
+          title: NEW_TAB.title,
+        });
+
+        expect(dataSyncService.saveQueryEvent).not.toHaveBeenCalled();
+      });
+
+      it('should detect visited page and store it as activity event', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(EXISTING_USER_ID);
+        dataSyncService.saveActivityEvent.mockResolvedValue();
+
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
+
+        // @ts-ignore
+        await browserMessageService.listeners[BrowserEvent.OnTabUpdated](
+          TAB_ID,
+          CHANGE_INFO,
+          PAGE_TAB
+        );
+
+        expect(dataSyncService.saveActivityEvent).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.saveActivityEvent).toHaveBeenCalledWith({
+          userId: EXISTING_USER_ID,
+          type: 'visit_page',
+          timestamp: expect.any(Number),
+          tabId: TAB_ID,
+          url: PAGE_TAB.url,
+          title: PAGE_TAB.title,
+        });
+
+        expect(dataSyncService.saveQueryEvent).not.toHaveBeenCalled();
       });
     });
 
-    it('should parse regular page visit correctly', () => {
-      const mockTab = {
-        url: 'https://example.com',
-        title: 'Example',
-      } as chrome.tabs.Tab;
-      const result = (backgroundService as any).parseTab(mockTab);
-      expect(result).toEqual({
-        type: 'visit_page',
-        url: 'https://example.com',
-        title: 'Example',
+    describe('onMessage', () => {
+      it('should receive tracking status request and return tracking status', async () => {
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
+        const sender = jest.fn();
+        const sendResponse = jest.fn();
+        // @ts-ignore
+        await browserMessageService.listeners[BrowserEvent.OnMessage](
+          TRACKING_STATUS_MSG,
+          sender,
+          sendResponse
+        );
+
+        // @ts-ignore
+        expect(backgroundService.isTracking).toBe(true);
+        expect(sendResponse).toHaveBeenCalledTimes(1);
+        expect(sendResponse).toHaveBeenCalledWith({
+          isTracking: true,
+        });
       });
-    });
-  });
 
-  describe('handleMessage', () => {
-    it('should handle GET_TRACKING_STATUS message', () => {
-      const sendResponse = jest.fn();
-      (backgroundService as any).isTracking = true;
+      it('should receive tracking toggle action and return new tracking status', async () => {
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
 
-      (backgroundService as any).handleMessage(
-        { action: 'GET_TRACKING_STATUS' },
-        {},
-        sendResponse
-      );
+        // @ts-ignore
+        expect(backgroundService.isTracking).toBe(true); // default value is true
 
-      expect(sendResponse).toHaveBeenCalledWith({ isTracking: true });
-    });
+        const sender = jest.fn();
+        const sendResponse = jest.fn();
+        // @ts-ignore
+        await browserMessageService.listeners[BrowserEvent.OnMessage](
+          TRACKING_TOGGLE_ACTION,
+          sender,
+          sendResponse
+        );
 
-    it('should handle TOGGLE_PERMISSION message', () => {
-      const sendResponse = jest.fn();
-      (backgroundService as any).isTracking = false;
-
-      (backgroundService as any).handleMessage(
-        { action: 'TOGGLE_PERMISSION' },
-        {},
-        sendResponse
-      );
-
-      expect((backgroundService as any).isTracking).toBe(true);
-      expect(sendResponse).toHaveBeenCalledWith({ isTracking: true });
-    });
-
-    it('should handle GET_NOT_SCORED_SEARCH_QUERIES message', async () => {
-      const sendResponse = jest.fn();
-      (backgroundService as any).userId = 'test-user-id';
-      mockDataSyncService.getUnratedQueries.mockResolvedValue([
-        {
-          id: 'query1',
-          score: 0,
-          content: 'query1',
-          tabId: 1,
-          timestamp: 1,
-          userId: 'test-user-id',
-        },
-        {
-          id: 'query2',
-          score: 0,
-          content: 'query2',
-          tabId: 1,
-          timestamp: 1,
-          userId: 'test-user-id',
-        },
-      ]);
-
-      await (backgroundService as any).handleMessage(
-        { action: 'GET_NOT_SCORED_SEARCH_QUERIES' },
-        {},
-        sendResponse
-      );
-
-      expect(mockDataSyncService.getUnratedQueries).toHaveBeenCalledWith(
-        'test-user-id'
-      );
-      expect(sendResponse).toHaveBeenCalledWith({
-        queries: ['query1', 'query2'],
+        expect(sendResponse).toHaveBeenCalledTimes(1);
+        expect(sendResponse).toHaveBeenCalledWith({
+          isTracking: false,
+        });
+        // @ts-ignore
+        expect(backgroundService.isTracking).toBe(false);
       });
-    });
 
-    it('should handle UPDATE_SEARCH_QUERY_SCORE message', async () => {
-      const sendResponse = jest.fn();
-      (backgroundService as any).userId = 'test-user-id';
-      const event = { id: 'query1', score: 5 };
+      it('should receive unrated queries list request and return unrated queries list', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(EXISTING_USER_ID);
+        dataSyncService.getUnratedQueries.mockResolvedValue([]);
 
-      await (backgroundService as any).handleMessage(
-        { action: 'UPDATE_SEARCH_QUERY_SCORE', event },
-        {},
-        sendResponse
-      );
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
 
-      expect(mockDataSyncService.updateQueryScore).toHaveBeenCalledWith(
-        'test-user-id',
-        event
-      );
-      expect(mockDataSyncService.getUnratedQueries).toHaveBeenCalledWith(
-        'test-user-id'
-      );
-    });
-  });
+        const sender = jest.fn();
+        const sendResponse = jest.fn();
+        // @ts-ignore
+        await browserMessageService.listeners[BrowserEvent.OnMessage](
+          UNRATED_QUERIES_LIST_REQUEST,
+          sender,
+          sendResponse
+        );
 
-  describe('setupListeners', () => {
-    it('should set up correct listeners', () => {
-      (backgroundService as any).setupListeners();
+        expect(dataSyncService.getUnratedQueries).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.getUnratedQueries).toHaveBeenCalledWith(
+          EXISTING_USER_ID
+        );
+        expect(sendResponse).toHaveBeenCalledTimes(1);
+        expect(sendResponse).toHaveBeenCalledWith({
+          queries: [],
+        });
+      });
 
-      expect(mockBrowserMessageService.addListener).toHaveBeenCalledWith(
-        BrowserEvent.OnTabUpdated,
-        expect.any(Function)
-      );
-      expect(mockBrowserMessageService.addListener).toHaveBeenCalledWith(
-        BrowserEvent.OnMessage,
-        expect.any(Function)
-      );
+      it('should receive unrated queries list request and return error message if there is an error', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(EXISTING_USER_ID);
+        dataSyncService.getUnratedQueries.mockRejectedValue(
+          new Error(ERROR_MESSAGE)
+        );
+
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
+
+        const sender = jest.fn();
+        const sendResponse = jest.fn();
+        // @ts-ignore
+        await browserMessageService.listeners[BrowserEvent.OnMessage](
+          UNRATED_QUERIES_LIST_REQUEST,
+          sender,
+          sendResponse
+        );
+
+        expect(dataSyncService.getUnratedQueries).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.getUnratedQueries).toHaveBeenCalledWith(
+          EXISTING_USER_ID
+        );
+        expect(sendResponse).toHaveBeenCalledTimes(1);
+        expect(sendResponse).toHaveBeenCalledWith({
+          error: ERROR_MESSAGE,
+        });
+      });
+
+      it('should receive update score request and update score', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(EXISTING_USER_ID);
+        dataSyncService.updateQueryScore.mockResolvedValue(undefined);
+        dataSyncService.getUnratedQueries.mockResolvedValue([]);
+
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
+
+        const sender = jest.fn();
+        const sendResponse = jest.fn();
+        // @ts-ignore
+        await browserMessageService.listeners[BrowserEvent.OnMessage](
+          UPDATE_SCORE_REQUEST,
+          sender,
+          sendResponse
+        );
+
+        expect(dataSyncService.updateQueryScore).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.updateQueryScore).toHaveBeenCalledWith(
+          EXISTING_USER_ID,
+          {
+            id: '1',
+            score: 1,
+          }
+        );
+        expect(dataSyncService.getUnratedQueries).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.getUnratedQueries).toHaveBeenCalledWith(
+          EXISTING_USER_ID
+        );
+      });
+
+      it('should receive update score request and return error message if there is an error', async () => {
+        localDataStorageService.getUserId.mockResolvedValue(EXISTING_USER_ID);
+        dataSyncService.updateQueryScore.mockRejectedValue(
+          new Error(ERROR_MESSAGE)
+        );
+        dataSyncService.getUnratedQueries.mockResolvedValue([]);
+
+        const backgroundService = new BackgroundService(
+          dataSyncService,
+          localDataStorageService,
+          browserMessageService
+        );
+        await backgroundService.start();
+
+        const sender = jest.fn();
+        const sendResponse = jest.fn();
+        // @ts-ignore
+        await browserMessageService.listeners[BrowserEvent.OnMessage](
+          UPDATE_SCORE_REQUEST,
+          sender,
+          sendResponse
+        );
+
+        expect(dataSyncService.updateQueryScore).toHaveBeenCalledTimes(1);
+        expect(dataSyncService.updateQueryScore).toHaveBeenCalledWith(
+          EXISTING_USER_ID,
+          {
+            id: '1',
+            score: 1,
+          }
+        );
+        expect(dataSyncService.getUnratedQueries).not.toHaveBeenCalled();
+        expect(sendResponse).toHaveBeenCalledTimes(1);
+        expect(sendResponse).toHaveBeenCalledWith({
+          error: ERROR_MESSAGE,
+        });
+      });
     });
   });
 });
