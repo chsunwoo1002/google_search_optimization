@@ -35,11 +35,11 @@ The project uses IndexedDB to store two types of data: user activities and user 
 
 ```typescript
 type UserActivity = {
-  id: number; // Auto-incremented
-  timestamp: number; // Unix timestamp
+  id: number;
+  timestamp: number;
   type: "new_tab" | "search_page" | "visit_page";
-  url?: string; // For 'search_page' and 'visit_page' events
-  title?: string; // For 'search_page' and 'visit_page' events
+  url: string;
+  title: string;
   tabId: number;
 };
 ```
@@ -48,8 +48,10 @@ type UserActivity = {
 
 ```typescript
 type UserScore = {
-  searchQuery: string; // Acts as the key
+  searchQuery: string;
   score: number | null;
+  timestamp: number;
+  tabId: number;
 };
 ```
 
