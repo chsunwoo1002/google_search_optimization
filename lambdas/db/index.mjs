@@ -83,7 +83,13 @@ export const handler = async (event, context) => {
 
       case "GET /activities/{userId}":
         body = await dynamo.send(
-          new ScanCommand({ TableName: userActivityTableName })
+          new ScanCommand({
+            TableName: userActivityTableName,
+            FilterExpression: "userId = :userId",
+            ExpressionAttributeValues: {
+              ":userId": event.pathParameters.userId,
+            },
+          })
         );
         body = body.Items;
         break;
@@ -106,9 +112,9 @@ export const handler = async (event, context) => {
         break;
       case "GET /queries/{userId}":
         body = await dynamo.send(
-          new QueryCommand({
+          new ScanCommand({
             TableName: searchQueryTableName,
-            KeyConditionExpression: "userId = :userId",
+            FilterExpression: "userId = :userId",
             ExpressionAttributeValues: {
               ":userId": event.pathParameters.userId,
             },
