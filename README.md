@@ -125,6 +125,30 @@ Considerations:
 - Filter out potential accidental clicks (e.g., dwell time < 2 seconds)
 - Implement a system to categorize searches (e.g., technical, general knowledge, product search)
 
+##### Term Frequency-Inverse Document Frequency (TF-IDF)
+
+###### Hypothesis
+
+More specific queries (higher sum of TF-IDF scores for words in a query) correlate with higher user-assigned scores.
+
+###### Null Hypothesis (H0)
+
+No significant correlation between the sum of TF-IDF scores for words in a query and the user-assigned score.
+
+###### Alternative Hypothesis (H1)
+
+Significant positive correlation between the sum of TF-IDF scores for words in a query and the user-assigned score.
+
+###### Testing Method
+
+- Calculate sum of TF-IDF scores for each query
+- Perform correlation analysis with user-assigned scores
+- Assess statistical significance
+
+###### Implications
+
+If supported, suggests that more specific queries lead to better search outcomes.
+
 ### Visualization
 
 - Events by time graph
